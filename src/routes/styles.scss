@@ -1,0 +1,109 @@
+// Variables
+// - Sizes
+$size-content-width: 1400px;
+// - Media breakpoints
+$media-size-desktop-max: 4200px;
+$media-size-desktop-min: 1200px;
+$media-size-tablet-max: ($media-size-desktop-min - 1);
+$media-size-tablet-min: 680px;
+$media-size-mobile-max: ($media-size-tablet-min - 1);
+
+:root {
+    --size-content-width: 1400px;
+    --size-inner-padding: 3rem;
+    --size-outer-padding: 2rem;
+}
+
+// Mixins
+@mixin size-desktop-only {
+    @media screen and (min-width: #{$media-size-desktop-min}) and (max-width: #{$media-size-desktop-max}) {
+        @content;
+    }
+}
+
+@mixin size-tablet-only {
+    @media screen and (min-width: #{$media-size-tablet-min}) and (max-width: #{$media-size-tablet-max}) {
+        @content;
+    }
+}
+
+@mixin size-content-width-max {
+    @media screen and (max-width: #{$size-content-width}) {
+        @content;
+    }
+}
+
+@mixin size-tablet-max {
+    @media screen and (max-width: #{$media-size-tablet-max}) {
+        @content;
+    }
+}
+
+@mixin size-mobile-max {
+    @media screen and (max-width: #{$media-size-mobile-max}) {
+        @content;
+    }
+}
+
+// Header text
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin: 0;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 100%;
+}
+
+h1 {
+    font-size: 3.5rem;
+}
+
+h2 {
+    font-size: 3rem;
+}
+
+h3 {
+    font-size: 2rem;
+    line-height: 2.125rem;
+}
+
+h4 {
+    font-size: 1.375rem;
+    line-height: 1.625rem;
+}
+
+h5 {
+    font-size: 1rem;
+    line-height: 1.375rem;
+}
+
+h6 {
+    font-size: 0.5rem;
+    line-height: 0.75rem;
+    letter-spacing: 1px;
+}
+
+.title {
+    margin-bottom: 0.5rem;
+}
+
+// Normal body text
+p,
+b,
+i,
+label {
+    margin: 0;
+}
+
+section.page {
+    padding: var(--size-outer-padding);
+
+    div.page-contents {
+        max-width: var(--size-content-width);
+        margin: auto;
+    }
+}
