@@ -1,20 +1,48 @@
 // Variables
-// - Sizes
 $size-content-width: 1400px;
-// - Media breakpoints
+
+// Media breakpoints
 $media-size-desktop-max: 4200px;
 $media-size-desktop-min: 1200px;
-$media-size-tablet-max: ($media-size-desktop-min - 1);
+$media-size-tablet-max: $media-size-desktop-min - 1;
 $media-size-tablet-min: 680px;
-$media-size-mobile-max: ($media-size-tablet-min - 1);
+$media-size-mobile-max: $media-size-tablet-min - 1;
 
-:root {
-    --size-content-width: 1400px;
-    --size-inner-padding: 3rem;
-    --size-outer-padding: 2rem;
+// Colors (add your own color scheme)
+$color-background: #fff;
+$color-text: rgba(0, 0, 0, 0.8);
+$color-primary: #557ece; // Example primary color
+$color-secondary: #f1976a; // Example secondary color
+
+// Fonts
+@font-face {
+    font-family: 'Inter';
+    src: url('fonts/Inter-Variable.ttf') format('truetype-variations');
+    font-weight: 100 900;
+    font-style: normal;
 }
 
 // Mixins
+@mixin for-size($min: null, $max: null) {
+    // Usage: @include for-size($media-size-desktop-min, $media-size-desktop-max) { ... }
+    @if $min != null and $max != null {
+        // Both min and max are provided
+        @media screen and (min-width: $min) and (max-width: $max) {
+            @content;
+        }
+    } @else if $min != null {
+        // Only min is provided
+        @media screen and (min-width: $min) {
+            @content;
+        }
+    } @else if $max != null {
+        // Only max is provided
+        @media screen and (max-width: $max) {
+            @content;
+        }
+    }
+}
+
 @mixin size-desktop-only {
     @media screen and (min-width: #{$media-size-desktop-min}) and (max-width: #{$media-size-desktop-max}) {
         @content;
@@ -46,49 +74,22 @@ $media-size-mobile-max: ($media-size-tablet-min - 1);
 }
 
 // Header text
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-    margin: 0;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 100%;
+@for $i from 1 through 6 {
+    $size: 3.5rem - 0.5rem * ($i - 1); // Decrease size with each header level
+    $line-height: $size + 0.125rem;
+    $margin-bottom: 0.5rem * $i;
+
+    h#{$i} {
+        font-size: $size !important;
+        line-height: $line-height;
+        margin-bottom: $margin-bottom;
+        font-weight: 400;
+        letter-spacing: if($i == 6, 1px, normal);
+    }
 }
 
-h1 {
-    font-size: 3.5rem;
-}
-
-h2 {
-    font-size: 3rem;
-}
-
-h3 {
-    font-size: 2rem;
-    line-height: 2.125rem;
-}
-
-h4 {
-    font-size: 1.375rem;
-    line-height: 1.625rem;
-}
-
-h5 {
-    font-size: 1rem;
-    line-height: 1.375rem;
-}
-
-h6 {
-    font-size: 0.5rem;
-    line-height: 0.75rem;
-    letter-spacing: 1px;
-}
-
-.title {
-    margin-bottom: 0.5rem;
+* {
+    font-family: Inter, 'Helvetica Neue', Helvetica, sans-serif;
 }
 
 // Normal body text
@@ -97,13 +98,39 @@ b,
 i,
 label {
     margin: 0;
+    font-weight: inherit;
+    line-height: 1.5; // Standard line-height for better readability
 }
 
-section.page {
-    padding: var(--size-outer-padding);
+// Utility classes
+.title {
+    margin-bottom: 1rem; // Consistent bottom margin for titles
+    text-transform: capitalize;
+}
 
-    div.page-contents {
-        max-width: var(--size-content-width);
+// Page-level styling
+section.page {
+    background: $color-background;
+    color: $color-text;
+    padding: 2rem; // Use padding from variables if needed
+
+    .page-contents {
+        max-width: $size-content-width;
         margin: auto;
+        display: flex;
+        gap: 4rem;
+        flex-direction: column;
+        padding: 3rem; // Inner padding
+    }
+}
+
+// Responsive adjustments
+@include for-size(null, $media-size-mobile-max) {
+    section.page {
+        padding: 1rem; // Less padding on mobile for more screen space
+
+        .page-contents {
+            gap: 2rem; // Less gap on smaller screens
+        }
     }
 }
