@@ -14,6 +14,11 @@ $color-text: rgba(0, 0, 0, 0.8);
 $color-primary: #557ece; // Example primary color
 $color-secondary: #f1976a; // Example secondary color
 
+$header-border-color: rgba(0, 0, 0, 0.5);
+$border-color: rgba(0, 0, 0, 0.1);
+$header-bg-color: rgba(0, 0, 0, 0.05);
+$table-spacing: 0.3rem;
+
 // Fonts
 @font-face {
     font-family: 'Inter';
@@ -73,23 +78,35 @@ $color-secondary: #f1976a; // Example secondary color
     }
 }
 
+@mixin table-header-styles {
+    font-weight: bold;
+    padding: 0.75rem;
+    border-bottom: 1px solid $header-border-color;
+    text-transform: uppercase;
+    text-align: left;
+}
+
+@mixin table-body-styles {
+    padding: 0.625rem;
+    border-bottom: 1px solid $border-color;
+}
+
+// Global universal styles
+* {
+    font-family: Inter, 'Helvetica Neue', Helvetica, sans-serif;
+}
+
 // Header text
 @for $i from 1 through 6 {
     $size: 3.5rem - 0.5rem * ($i - 1); // Decrease size with each header level
     $line-height: $size + 0.125rem;
-    $margin-bottom: 0.5rem * $i;
 
     h#{$i} {
         font-size: $size !important;
-        line-height: $line-height;
-        margin-bottom: $margin-bottom;
-        font-weight: 400;
-        letter-spacing: if($i == 6, 1px, normal);
+        line-height: $line-height !important;
+        font-weight: 400 !important;
+        letter-spacing: if($i == 6, 1px, normal) !important;
     }
-}
-
-* {
-    font-family: Inter, 'Helvetica Neue', Helvetica, sans-serif;
 }
 
 // Normal body text
@@ -103,34 +120,160 @@ label {
 }
 
 // Utility classes
-.title {
-    margin-bottom: 1rem; // Consistent bottom margin for titles
-    text-transform: capitalize;
+.page-title {
+    font-weight: bold;
+}
+.header-txt {
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
 }
 
 // Page-level styling
 section.page {
     background: $color-background;
     color: $color-text;
-    padding: 2rem; // Use padding from variables if needed
+    padding: 2rem;
 
     .page-contents {
         max-width: $size-content-width;
         margin: auto;
         display: flex;
-        gap: 4rem;
+        gap: 3rem;
         flex-direction: column;
-        padding: 3rem; // Inner padding
+        padding: 3rem;
+    }
+
+    @include for-size(null, $media-size-mobile-max) {
+        padding: 1rem;
+
+        .page-contents {
+            gap: 2rem;
+            padding: 1.5rem 1rem;
+        }
     }
 }
 
-// Responsive adjustments
-@include for-size(null, $media-size-mobile-max) {
-    section.page {
-        padding: 1rem; // Less padding on mobile for more screen space
+// Route-specific styling
+section.page#invoice .page-contents {
+    // Header group
+    .page-header {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 4rem;
+        border-bottom: 2px solid #eee;
 
-        .page-contents {
-            gap: 2rem; // Less gap on smaller screens
+        .page-header__invoice-names {
+            .page-title {
+                margin-bottom: 1.5rem !important;
+            }
+
+            .invoice-names__from-to {
+                display: flex;
+                gap: 3rem;
+
+                > div {
+                    display: flex;
+                    flex-direction: column;
+                }
+            }
+        }
+
+        .page-header__invoice-details {
+            display: flex;
+            gap: 3rem;
+        }
+    }
+
+    // Totals group
+    #invoice-totals {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3rem;
+
+        .summary-stats {
+            flex: 1;
+            flex-direction: column;
+            background-color: rgba(black, 0.05);
+            border-radius: 0.25rem;
+            padding: 1rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+
+            .stats-value {
+                font-weight: 500 !important;
+            }
+        }
+    }
+
+    // Summaries group
+    #invoice-summaries {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 2rem;
+
+        // Billable hours summary table styles
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 $table-spacing;
+
+            thead tr th {
+                @include table-header-styles;
+            }
+
+            tbody tr td {
+                @include table-body-styles;
+                &:first-of-type {
+                    padding-right: 1rem;
+                }
+            }
+        }
+
+        .header-txt {
+            margin-bottom: 1rem;
+        }
+
+        // Bar chart styles
+        canvas#summaryBarChart {
+            width: 100%;
+            height: 400px;
+        }
+    }
+
+    // Time entries group
+    #invoice-time-entries {
+        table#time-entries-table {
+            width: 100%;
+            th,
+            td {
+                border-bottom: 1px solid $border-color;
+                padding: 0.75rem;
+                text-align: left;
+            }
+            th {
+                @include table-header-styles;
+            }
+        }
+    }
+
+    // Responsive styles for mobile devices
+    @include for-size(null, $media-size-mobile-max) {
+        // Adjust layout for mobile responsiveness
+        .page-header,
+        #invoice-totals,
+        #invoice-summaries {
+            flex-direction: column;
+            padding: 0;
+        }
+
+        canvas#summaryBarChart {
+            height: 300px; // Adjust the height for mobile devices
         }
     }
 }

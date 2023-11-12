@@ -1,148 +1,202 @@
 <script lang="ts">
+    import './styles.scss';
     import Papa from 'papaparse';
     import moment from 'moment';
     import Chart from 'chart.js/auto';
+    import { writable } from 'svelte/store';
 
-    const invoiceID: string = '0006';
-    const employeeName: string = 'Kyle Nakamura';
-    const companyName: string = 'Geek Office';
-    const billableRate: number = 45.0;
-    const customOrder = ['Date', 'From → To', 'Project', 'Description', 'Duration'];
-    const columnsToKeep = ['Project', 'Description', 'Start date', 'Start time', 'End time', 'Duration'];
-    const billableRateFormatted: string = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(billableRate);
-    const projectSummary: any = {};
+    // Define a type for time entry
+    type TimeEntry = {
+        Date?: string;
+        'From → To'?: string;
+        Project: string;
+        Description: string;
+        Duration: string;
+    };
 
-    let invoiceMonthYear: string = '';
-    let data: any[] = [];
-    let invoiceDateStart: string = '';
-    let invoiceDateEnd: string = '';
-    let totalTime: number = 0.0;
-    let totalBillableAmountFormatted: string = '';
-    let chart: any;
-    let hoursPerDay: any = {};
+    // Constants for invoice details
+    const invoiceId = '0006';
+    const employeeFullName = 'Kyle Nakamura';
+    const companyDisplayName = 'GeekOffice, LLC';
+    const hourlyRate = 45.0;
+    const columnNamesFormatted = ['Date', 'From → To', 'Project', 'Description', 'Duration'];
+    const columnNamesOriginal = ['Project', 'Description', 'Start date', 'Start time', 'End time', 'Duration'];
+    const invoiceSummary: Record<string, number> = {};
 
-    $: if (data.length > 0) {
-        // Aggregate hours per day
-        hoursPerDay = data.reduce((acc, row) => {
-            const date = row['Date'];
-            const hours = parseFloat(row['Duration']);
-            if (acc[date]) {
-                acc[date] += hours;
-            } else {
-                acc[date] = hours;
+    // Reactive Svelte stores for shared state
+    const timeEntriesStore = writable<TimeEntry[]>([]);
+    const isLoading = writable(false); // To track loading state
+
+    // Dynamic variables for tracking state
+    let billingPeriodFormatted = '';
+    let invoicedHours = 0.0;
+    let barChart: Chart | undefined;
+
+    // Binding to the canvas element
+    let barChartCanvas: HTMLCanvasElement;
+
+    // Reactive variable for invoice total
+    $: invoiceTotalFormatted = formatCurrency(invoicedHours * hourlyRate);
+
+    // Reactive statement to handle chart rendering
+    $: $timeEntriesStore.length && createBarChart();
+
+    // Utility function to format number as currency
+    const formatCurrency = (number: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(number);
+
+    // Function to process and parse CSV data
+    function processCSVData(data: string) {
+        Papa.parse(data, {
+            header: true,
+            complete: (results) => {
+                const timeEntries = transformCSVData(results.data);
+                timeEntriesStore.set(timeEntries);
+                updateInvoiceSummary(timeEntries);
+                updateBillingPeriod(timeEntries);
+            }
+        });
+    }
+
+    // Function to transform raw CSV data into a more usable format
+    function transformCSVData(rawData: any[]): TimeEntry[] {
+        return rawData.map(transformRow).filter((row) => row !== null);
+    }
+
+    // Function to transform each row of CSV data
+    function transformRow(row: any): TimeEntry | null {
+        const newRow = reduceColumns(row);
+        try {
+            formatRowData(newRow);
+            invoicedHours += parseFloat(newRow['Duration']);
+            return newRow;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Function to reduce and reformat columns of a row
+    function reduceColumns(row: any): Partial<TimeEntry> {
+        return columnNamesOriginal.reduce((acc, column) => {
+            if (column in row) {
+                acc[column as keyof TimeEntry] = row[column];
             }
             return acc;
         }, {});
+    }
 
-        const ctx = document.getElementById('summaryBarChart').getContext('2d');
-
-        if (chart) {
-            chart.destroy();
+    // Function to apply various transformations to the row data
+    function formatRowData(row: Partial<TimeEntry>) {
+        if (row['Start date']) {
+            row.Date = moment(row['Start date'], 'YYYY-MM-DD').format('M/D/YY');
+            delete row['Start date'];
         }
 
-        const labels = Object.keys(hoursPerDay).sort();
-        const dataset = labels.map((label) => hoursPerDay[label]);
+        if (row['Start time']) {
+            row['Start time'] = moment(row['Start time'], 'HH:mm:ss').format('h:mm A');
+        }
 
-        chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Hours',
-                        data: dataset,
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            }
+        if (row['End time']) {
+            row['End time'] = moment(row['End time'], 'HH:mm:ss').format('h:mm A');
+        }
+
+        if (row['Duration'] && row['Duration'].includes(':')) {
+            const [hours, minutes] = row['Duration'].split(':').map(Number);
+            row.Duration = (hours + minutes / 60).toFixed(2);
+        }
+
+        if (row['Start time'] && row['End time']) {
+            row['From → To'] = `${row['Start time']} → ${row['End time']}`;
+            delete row['Start time'];
+            delete row['End time'];
+        }
+
+        row.Description = row.Description ? row.Description.trim() + ' ' : ' ';
+
+        return row as TimeEntry;
+    }
+
+    // Function to update the invoice summary with the latest time entries
+    function updateInvoiceSummary(timeEntries: TimeEntry[]) {
+        timeEntries.forEach((row) => {
+            const project = row.Project;
+            const duration = parseFloat(row.Duration);
+            invoiceSummary[project] = (invoiceSummary[project] || 0) + duration;
         });
     }
 
-    function processCSVData(csvData: string) {
-        Papa.parse(csvData, {
-            header: true,
-            complete: function (results) {
-                data = results.data.map((row) => {
-                    const newRow: any = columnsToKeep.reduce((acc: any, column: string) => {
-                        if (column in row) {
-                            acc[column] = row[column];
-                        }
-                        return acc;
-                    }, {});
+    // Function to update the billing period based on the first time entry
+    function updateBillingPeriod(timeEntries: TimeEntry[]) {
+        if (timeEntries.length) {
+            const firstRowDate = moment(timeEntries[0].Date, 'M/D/YY');
+            billingPeriodFormatted = firstRowDate.format('MMMM YYYY').toUpperCase();
+        }
+    }
 
-                    try {
-                        // Transform 'Start date' to M/D/YY format and rename it to 'Date'
-                        newRow['Date'] = moment(newRow['Start date']).format('M/D/YY');
-                        delete newRow['Start date'];
+    // Updated createBarChart function
+    function createBarChart() {
+        // Ensure the canvas is ready
+        if (!barChartCanvas) {
+            alert('nope');
+            return;
+        }
 
-                        // Transform 'Start time', 'End time' to H:MM AM/PM format
-                        newRow['Start time'] = moment(newRow['Start time'], 'HH:mm:ss').format('h:mm A');
-                        newRow['End time'] = moment(newRow['End time'], 'HH:mm:ss').format('h:mm A');
+        $: timeEntriesStore.subscribe((entries) => {
+            if (entries.length > 0) {
+                // Aggregate hours per day from time entries
+                const hoursPerDay = entries.reduce((acc, entry) => {
+                    const date = entry.Date;
+                    const hours = parseFloat(entry.Duration);
+                    acc[date] = (acc[date] || 0) + hours;
+                    return acc;
+                }, {});
 
-                        // Transform 'Duration' to decimal amount
-                        if (newRow['Duration'] && newRow['Duration'].includes(':')) {
-                            const durationParts = newRow['Duration'].split(':');
-                            const durationHours = parseInt(durationParts[0]);
-                            const durationMinutes = parseInt(durationParts[1]);
-                            newRow['Duration'] = (durationHours + durationMinutes / 60).toFixed(2);
-                        }
+                // Prepare the labels and dataset for the chart
+                const labels = Object.keys(hoursPerDay).sort((a, b) => moment(a, 'M/D/YY').diff(moment(b, 'M/D/YY')));
+                const dataset = labels.map((label) => hoursPerDay[label]);
 
-                        // Combine the 'Start time' and 'End time' columns into a new column
-                        newRow['From → To'] = `${newRow['Start time']} → ${newRow['End time']}`;
-                        delete newRow['Start time'];
-                        delete newRow['End time'];
-
-                        // Ensure 'Description' always has some content.
-                        newRow['Description'] += ' ';
-
-                        // Check if any transformation resulted in an invalid value
-                        if (Object.values(newRow).some((x) => x.includes('Invalid date') || x === 'NaN' || !x)) {
-                            return null;
-                        } else {
-                            totalTime += parseFloat(newRow['Duration']);
-                        }
-                    } catch (e) {
-                        return null;
-                    }
-
-                    return newRow;
-                });
-
-                data = data.filter((row) => row !== null);
-
-                invoiceDateStart = data[0]['Date'];
-                invoiceDateEnd = data.at(-1)['Date'];
-                totalBillableAmountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-                    totalTime * billableRate
-                );
-
-                if (data.length) {
-                    const firstRowDate = moment(data[0]['Date'], 'M/D/YY');
-                    invoiceMonthYear = firstRowDate.format('MMMM YYYY').toUpperCase();
+                // Destroy the existing chart instance if it exists
+                if (barChart) {
+                    barChart.destroy();
                 }
 
-                // Calculate the summary
-                data.forEach((row: any) => {
-                    if (row.Project in projectSummary) {
-                        projectSummary[row.Project] += parseFloat(row.Duration);
-                    } else {
-                        projectSummary[row.Project] = parseFloat(row.Duration);
+                // Create a new bar chart instance
+                barChart = new Chart(barChartCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Hours',
+                                data: dataset,
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
                     }
                 });
             }
         });
     }
 
-    async function handleFileUpload(event) {
-        const file = event.target.files[0];
+    // Handle file upload with UI feedback
+    async function handleFileUpload(event: Event) {
+        isLoading.set(true); // Set loading state
+        const file = (event.target as HTMLInputElement).files?.[0];
         if (file) {
             const reader = new FileReader();
             reader.readAsText(file);
-
-            reader.onload = function (event) {
-                processCSVData(event.target.result);
+            reader.onload = (e) => {
+                processCSVData((e.target as FileReader).result as string);
+                isLoading.set(false); // Reset loading state
             };
         }
     }
@@ -150,271 +204,113 @@
 
 <section class="page" id="invoice">
     <div class="page-contents">
-        <div class="content-group invoice-header">
-            <div class="invoice-details">
-                <h1 class="title">Invoice</h1>
-                <div class="invoice-details-number-date">
-                    <div>
-                        <p class="invoice-number">Number</p>
-                        <span>{invoiceID}</span>
+        <div class="content-group page-header">
+            <div class="page-header__invoice-names">
+                <h1 class="page-title header-txt">Invoice</h1>
+
+                <div class="invoice-names__from-to">
+                    <div class="from-to__from">
+                        <h6 class="header-txt">From</h6>
+                        <span>{employeeFullName}</span>
+                        <span>1620 Holt Ave</span>
+                        <span>Los Altos, CA 94024</span>
+                        <span>626-388-5416</span>
                     </div>
-                    <div>
-                        <p class="invoice-date">Date</p>
-                        <span>{invoiceMonthYear}</span>
+
+                    <div class="from-to__to">
+                        <h6 class="header-txt">Billed To</h6>
+                        <span>{companyDisplayName}</span>
                     </div>
                 </div>
             </div>
 
-            <div id="header-dates">
-                <div id="date-start">
-                    <h5 class="title">From</h5>
-                    <h4>{invoiceDateStart}</h4>
-                </div>
+            <div class="page-header__invoice-details">
+                {#if !$timeEntriesStore.length}
+                    <input type="file" id="csvFile" accept=".csv" on:change={handleFileUpload} />
+                {:else}
+                    <div>
+                        <h6 class="header-txt invoice-id">Number</h6>
+                        <span>{invoiceId}</span>
+                    </div>
 
-                <div id="date-end">
-                    <h5 class="title">To</h5>
-                    <h4>{invoiceDateEnd}</h4>
-                </div>
+                    <div>
+                        <h6 class="header-txt invoice-date">Billing Period</h6>
+                        <span>{billingPeriodFormatted}</span>
+                    </div>
+                {/if}
             </div>
         </div>
 
-        {#if !data.length}
-            <input type="file" id="csvFile" accept=".csv" on:change={handleFileUpload} />
+        {#if $timeEntriesStore.length}
+            <div class="content-group" id="invoice-totals">
+                <div class="summary-stats">
+                    <h5 class="header-txt stats-name">Invoiced Hours</h5>
+                    <h4 class="stats-value">{invoicedHours}</h4>
+                </div>
+
+                <div class="summary-stats">
+                    <h5 class="header-txt stats-name">Hourly Rate</h5>
+                    <h4 class="stats-value">{formatCurrency(hourlyRate)}</h4>
+                </div>
+
+                <div class="summary-stats">
+                    <h5 class="header-txt stats-name">Invoice total</h5>
+                    <h4 class="stats-value">{invoiceTotalFormatted}</h4>
+                </div>
+            </div>
         {/if}
 
-        <div class="content-group" id="invoice-totals">
-            <div class="summary-stats">
-                <h5 class="title stats-name">Total tracked time (hours)</h5>
-                <h4 class="stats-value">{totalTime}</h4>
-            </div>
-
-            <div class="summary-stats">
-                <h5 class="title stats-name">Billable rate (per hour)</h5>
-                <h4 class="stats-value">{billableRateFormatted}</h4>
-            </div>
-
-            <div class="summary-stats">
-                <h5 class="title stats-name">Invoice total</h5>
-                <h4 class="stats-value">{totalBillableAmountFormatted}</h4>
-            </div>
-        </div>
-
         <div class="content-group" id="invoice-summaries">
-            <div id="summary-category-totals">
-                <h4 class="title">Billable hours summary</h4>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Project</th>
-                            <th>Hours</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {#each Object.keys(projectSummary) as project}
+            {#if $timeEntriesStore.length}
+                <div id="summary-category-totals">
+                    <h4 class="header-txt">Invoice Summary</h4>
+                    <table>
+                        <thead>
                             <tr>
-                                <td>{project}</td>
-                                <td>{projectSummary[project]}</td>
+                                <th>Project</th>
+                                <th>Hours</th>
                             </tr>
-                        {/each}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            {#each Object.keys(invoiceSummary) as project}
+                                <tr>
+                                    <td>{project}</td>
+                                    <td>{invoiceSummary[project].toFixed(1)}</td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                </div>
+            {/if}
 
             <div id="summary-bar-chart">
-                <canvas id="summaryBarChart" />
+                <canvas id="summaryBarChart" bind:this={barChartCanvas} />
             </div>
         </div>
 
-        <div class="content-group" id="invoice-time-entries">
-            <h4 class="title">Time Entries</h4>
-            <table id="time-entries-table">
-                {#if data.length > 0}
+        {#if $timeEntriesStore.length}
+            <div class="content-group" id="invoice-time-entries">
+                <h4 class="header-txt">Time Entries</h4>
+                <table id="time-entries-table">
                     <thead>
                         <tr>
-                            {#each customOrder as key}
+                            {#each columnNamesFormatted as key}
                                 <th>{key}</th>
                             {/each}
                         </tr>
                     </thead>
 
                     <tbody>
-                        {#each data as row}
+                        {#each $timeEntriesStore as row}
                             <tr>
-                                {#each customOrder as key}
+                                {#each columnNamesFormatted as key}
                                     <td>{row[key]}</td>
                                 {/each}
                             </tr>
                         {/each}
                     </tbody>
-                {:else}
-                    <input type="file" id="csvFile" accept=".csv" on:change={handleFileUpload} />
-                {/if}
-            </table>
-        </div>
+                </table>
+            </div>
+        {/if}
     </div>
 </section>
-
-<style lang="scss">
-    // Import the main styles to ensure consistency across the application
-    @import 'styles.scss';
-
-    // Variables for easy maintenance and consistency
-    $header-border-color: rgba(0, 0, 0, 0.5);
-    $border-color: rgba(0, 0, 0, 0.1);
-    $header-bg-color: rgba(0, 0, 0, 0.05);
-    $table-spacing: 0.3rem;
-
-    // Mixins for DRY code and consistency
-    @mixin table-header-styles {
-        font-weight: bold;
-        padding: 0.75rem;
-        border-bottom: 1px solid $header-border-color;
-        text-transform: uppercase;
-        text-align: left;
-    }
-
-    @mixin table-body-styles {
-        padding: 0.625rem;
-        border-bottom: 1px solid $border-color;
-    }
-
-    // Page contents styling
-    .page-contents {
-        display: flex;
-        flex-direction: column;
-        gap: 2rem;
-
-        // Header group
-        .invoice-header {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            gap: 1rem;
-            align-items: center;
-            padding: 1rem 2rem;
-            border-bottom: 2px solid #eee;
-
-            .title {
-                text-transform: uppercase;
-            }
-
-            #header-dates {
-                display: flex;
-                gap: 2.5rem;
-            }
-
-            .invoice-details {
-                text-align: left;
-
-                h1 {
-                    color: #333; // Dark color for prominence
-                    margin-bottom: 0.5rem;
-                }
-                .invoice-details-number-date {
-                    display: flex;
-                    gap: 2rem;
-
-                    > div {
-                        display: flex;
-                        flex-direction: column;
-                    }
-                }
-
-                .invoice-number,
-                .invoice-date {
-                    color: #666; // Slightly lighter than the title for hierarchy
-
-                    span {
-                        font-weight: bold; // Emphasize the dynamic content
-                    }
-                }
-            }
-        }
-
-        // Totals group
-        #invoice-totals {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 3rem;
-
-            .summary-stats {
-                flex: 1;
-                background-color: rgba(black, 0.05);
-                border-radius: 0.25rem;
-                padding: 1rem;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-
-                .stats-value {
-                    margin-bottom: 0 !important;
-                }
-            }
-        }
-
-        // Summaries group
-        #invoice-summaries {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 2rem;
-
-            // Billable hours summary table styles
-            table {
-                width: 100%;
-                border-collapse: separate;
-                border-spacing: 0 $table-spacing;
-
-                thead tr th {
-                    @include table-header-styles;
-                }
-
-                tbody tr td {
-                    @include table-body-styles;
-                }
-            }
-
-            .title {
-                margin-bottom: 1rem;
-            }
-
-            // Bar chart styles
-            canvas#summaryBarChart {
-                width: 100%;
-                height: 400px;
-            }
-        }
-
-        // Time entries group
-        #invoice-time-entries {
-            table#time-entries-table {
-                width: 100%;
-                th,
-                td {
-                    border-bottom: 1px solid $border-color;
-                    padding: 0.75rem;
-                    text-align: left;
-                }
-                th {
-                    @include table-header-styles;
-                }
-            }
-        }
-    }
-
-    // Responsive styles for mobile devices
-    @include for-size(null, $media-size-mobile-max) {
-        .page-contents {
-            // Adjust layout for mobile responsiveness
-            .invoice-header,
-            #invoice-totals,
-            #invoice-summaries {
-                flex-direction: column;
-            }
-
-            canvas#summaryBarChart {
-                height: 300px; // Adjust the height for mobile devices
-            }
-        }
-    }
-</style>
