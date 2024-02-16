@@ -185,6 +185,12 @@ section.page#invoice .page-contents {
         .page-header__invoice-details {
             display: flex;
             gap: 3rem;
+
+            input#csvFile {
+                cursor: pointer;
+                height: auto;
+                margin-bottom: auto;
+            }
         }
     }
 

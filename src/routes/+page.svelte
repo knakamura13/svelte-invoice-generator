@@ -15,7 +15,7 @@
     };
 
     // Constants for invoice details
-    const invoiceId = '0006';
+    const invoiceId = '0009';
     const employeeFullName = 'Kyle Nakamura';
     const companyDisplayName = 'GeekOffice, LLC';
     const hourlyRate = 45.0;
@@ -67,7 +67,7 @@
         const newRow = reduceColumns(row);
         try {
             formatRowData(newRow);
-            invoicedHours += parseFloat(newRow['Duration']);
+            invoicedHours += parseFloat(<string>newRow['Duration']);
             return newRow;
         } catch (e) {
             return null;
@@ -110,7 +110,7 @@
             delete row['End time'];
         }
 
-        row.Description = row.Description ? row.Description.trim() + ' ' : ' ';
+        row.Description = row.Description ? `${row.Description.trim()} ` : ' ';
 
         return row as TimeEntry;
     }
@@ -140,7 +140,7 @@
             return;
         }
 
-        $: timeEntriesStore.subscribe((entries) => {
+        timeEntriesStore.subscribe((entries) => {
             if (entries.length > 0) {
                 // Aggregate hours per day from time entries
                 const hoursPerDay = entries.reduce((acc, entry) => {
@@ -177,6 +177,11 @@
                     options: {
                         responsive: true,
                         scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            },
                             y: {
                                 beginAtZero: true
                             }
@@ -210,7 +215,7 @@
 
                 <div class="invoice-names__from-to">
                     <div class="from-to__from">
-                        <h6 class="header-txt">From</h6>
+                        <h5 class="header-txt">From</h5>
                         <span>{employeeFullName}</span>
                         <span>1620 Holt Ave</span>
                         <span>Los Altos, CA 94024</span>
@@ -218,7 +223,7 @@
                     </div>
 
                     <div class="from-to__to">
-                        <h6 class="header-txt">Billed To</h6>
+                        <h5 class="header-txt">Billed To</h5>
                         <span>{companyDisplayName}</span>
                     </div>
                 </div>
@@ -229,12 +234,12 @@
                     <input type="file" id="csvFile" accept=".csv" on:change={handleFileUpload} />
                 {:else}
                     <div>
-                        <h6 class="header-txt invoice-id">Number</h6>
+                        <h5 class="header-txt invoice-id">Number</h5>
                         <span>{invoiceId}</span>
                     </div>
 
                     <div>
-                        <h6 class="header-txt invoice-date">Billing Period</h6>
+                        <h5 class="header-txt invoice-date">Billing Period</h5>
                         <span>{billingPeriodFormatted}</span>
                     </div>
                 {/if}
